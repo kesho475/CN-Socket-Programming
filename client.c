@@ -5,14 +5,15 @@
 #include <unistd.h>
 #include "common.h"
 
-/* * Client-Side Entry Point
- * Initial Setup & Network Boilerplate
+/* * Client-Side Receiver Logic
+ * Developed by: Shobhit Keshri
+ * Focus: State machine for receiving packets and handling ACKs in sequence.
  */
 
 int main() {
     int sock;
     struct sockaddr_in serv;
-    Packet p;
+    Packet p, ack;
 
     // Create UDP Socket
     sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -21,7 +22,7 @@ int main() {
         exit(1);
     }
 
-    // Configure Server Address (we are using localhost for the project)
+    // Configure Server Address (we are using Localhost for this project)
     serv.sin_family = AF_INET;
     serv.sin_port = htons(PORT);
     serv.sin_addr.s_addr = inet_addr("127.0.0.1");
@@ -34,6 +35,52 @@ int main() {
            (struct sockaddr*)&serv, sizeof(serv));
 
     printf("client started...\n");
-    
+
+    // Receiver state: tracking the exact sequence number we need next
+    int expect = 0; 
+
+    // Main event loop for the receiver
+    while (1) {
+        memset(&p, 0, sizeof(p));
+
+        // Block and wait for a packet from the server
+        int n = recvfrom(sock, &p, sizeof(p), 0, NULL, NULL);
+        if (n < 0) continue;
+
+        if (p.type == DATA) {
+            
+            // Check if this is the exact packet we are expecting (in-order delivery)
+            if (p.seq == expect) {
+                
+                // Print received message (Decryption to be added by Samyak)
+                printf("received %d: %s\n", p.seq, p.msg); 
+
+                // Construct and send the positive ACK
+                ack.seq = p.seq;
+                ack.type = ACK;
+
+                sendto(sock, &ack, sizeof(ack), 0,
+                       (struct sockaddr*)&serv,
+                       sizeof(serv));
+
+                expect++; // Slide our receiver window forward
+
+            } else {
+                
+                // Out-of-order packet detected! 
+                // To keep the core GBN logic intact, re-ACK the last good packet we got.
+                printf("skip %d (want %d)\n", p.seq, expect);
+
+                ack.seq = expect - 1;
+                ack.type = ACK;
+
+                sendto(sock, &ack, sizeof(ack), 0,
+                       (struct sockaddr*)&serv,
+                       sizeof(serv));
+            }
+        }
+    }
+
+    close(sock);
     return 0;
 }
