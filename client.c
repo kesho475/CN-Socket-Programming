@@ -5,6 +5,13 @@
 #include <unistd.h>
 #include "common.h"
 
+// Security Layer Added by Samyak Sanklecha: Basic XOR encryption
+void enc(char *msg) {
+    for (int i = 0; i < strlen(msg); i++) {
+        msg[i] ^= 0xAA;
+    }
+}
+
 /* * Client-Side Receiver Logic
  * Developed by: Shobhit Keshri
  * Focus: State machine for receiving packets and handling ACKs in sequence.
@@ -48,6 +55,9 @@ int main() {
         if (n < 0) continue;
 
         if (p.type == DATA) {
+
+            // Samyak's Decryption Hook
+            enc(p.msg); // decrypt
             
             // Check if this is the exact packet we are expecting (in-order delivery)
             if (p.seq == expect) {
